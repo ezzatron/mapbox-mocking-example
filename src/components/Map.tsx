@@ -1,17 +1,13 @@
-import { GeoJSONSource, Map } from "mapbox-gl";
+import { GeoJSONSource, Map as MapboxMap } from "mapbox-gl";
 import { Component } from "react";
+import { maximumLat, maximumLng, minimumLat, minimumLng } from "src/bounds";
 
 type Props = {
   accessToken: string;
   featuresURL: string;
 };
 
-const minimumLat = 40.73088334317342;
-const maximumLat = 40.71368521621004;
-const minimumLng = -74.06457278183707;
-const maximumLng = -74.03501416729776;
-
-export class Mapbox extends Component<Props> {
+export default class Map extends Component<Props> {
   constructor(props: Props) {
     super(props);
 
@@ -20,7 +16,7 @@ export class Mapbox extends Component<Props> {
     this.#setRef = (container) => {
       if (!container) return;
 
-      const map = new Map({
+      const map = new MapboxMap({
         accessToken,
         container,
         style: "mapbox://styles/betsecure/clm06v5k900a501r87g7g5qc3",

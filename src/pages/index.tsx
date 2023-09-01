@@ -1,10 +1,8 @@
-import Head from "next/head";
-
-import styles from "@/pages/index.module.css";
-import Map from "@/components/Map";
 import { GetServerSideProps } from "next";
-import { Mapbox } from "@/components/Mapbox";
+import Head from "next/head";
 import { useEffect, useState } from "react";
+import Map from "../components/Map";
+import styles from "./index.module.css";
 
 type Props = {
   mapboxToken: string;
@@ -19,12 +17,13 @@ export const getServerSideProps: GetServerSideProps<Props> = async () => {
 };
 
 export default function Home({ mapboxToken }: Props) {
-  const [timestamp, setTimestamp] = useState(Date.now());
+  const [startTime] = useState(Date.now());
+  const [requestTime, setRequestTime] = useState(Date.now());
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setTimestamp(Date.now());
-    }, 60000);
+      setRequestTime(Date.now());
+    }, 3000);
 
     return () => {
       clearInterval(interval);
@@ -34,13 +33,13 @@ export default function Home({ mapboxToken }: Props) {
   return (
     <div className={styles.container}>
       <Head>
-        <title>Mapbox mocking example</title>
+        <title>Mapbox playground</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <Mapbox
+      <Map
         accessToken={mapboxToken}
-        featuresURL={`/api/transactions?t=${timestamp}`}
+        featuresURL={`/api/transactions?startTime=${startTime}&requestTime=${requestTime}`}
       />
     </div>
   );

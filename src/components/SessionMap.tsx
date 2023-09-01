@@ -1,13 +1,14 @@
-import { GeoJSONSource, Map as MapboxMap } from "mapbox-gl";
+import { FeatureCollection } from "geojson";
+import { GeoJSONSource, Map } from "mapbox-gl";
 import { Component } from "react";
 import { maximumLat, maximumLng, minimumLat, minimumLng } from "src/bounds";
 
 type Props = {
   accessToken: string;
-  featuresURL: string;
+  transactions: FeatureCollection;
 };
 
-export default class Map extends Component<Props> {
+export default class SessionMap extends Component<Props> {
   constructor(props: Props) {
     super(props);
 
@@ -16,7 +17,7 @@ export default class Map extends Component<Props> {
     this.#setRef = (container) => {
       if (!container) return;
 
-      const map = new MapboxMap({
+      const map = new Map({
         accessToken,
         container,
         style: "mapbox://styles/betsecure/clm06v5k900a501r87g7g5qc3",
@@ -26,11 +27,12 @@ export default class Map extends Component<Props> {
           [maximumLng, maximumLat],
         ],
       });
+      this.#map = map;
 
       map.on("load", () => {
         map.addSource("transactions", {
           type: "geojson",
-          data: this.props.featuresURL,
+          data: this.props.transactions,
         });
 
         map.addLayer({
@@ -64,10 +66,14 @@ export default class Map extends Component<Props> {
     };
   }
 
-  componentDidUpdate({ featuresURL }: Props): void {
-    if (this.props.featuresURL !== featuresURL) {
-      this.#featureSource?.setData(this.props.featuresURL);
+  componentDidUpdate({ transactions }: Props): void {
+    if (this.props.transactions !== transactions) {
+      this.#featureSource?.setData(this.props.transactions);
     }
+  }
+
+  componentWillUnmount(): void {
+    this.#map?.remove();
   }
 
   render() {
@@ -75,5 +81,6 @@ export default class Map extends Component<Props> {
   }
 
   readonly #setRef: (container: HTMLDivElement) => void;
+  #map: Map | undefined;
   #featureSource: GeoJSONSource | undefined;
 }

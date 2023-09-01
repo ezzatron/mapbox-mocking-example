@@ -2,17 +2,13 @@ import { Feature, FeatureCollection } from "geojson";
 import type { NextApiRequest, NextApiResponse } from "next";
 import seedrandom from "seedrandom";
 import { maximumLat, maximumLng, minimumLat, minimumLng } from "src/bounds";
+import { startTime } from "../../start-time";
 
 export default function transactions(
-  req: NextApiRequest,
+  _: NextApiRequest,
   res: NextApiResponse<FeatureCollection>,
 ) {
-  const { startTime, requestTime } = req.query;
-
-  if (!startTime || !requestTime) {
-    res.status(400);
-    return;
-  }
+  const requestTime = Date.now();
 
   const random = seedrandom(startTime.toString());
   const transactionCount =

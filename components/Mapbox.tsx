@@ -18,10 +18,13 @@ export class Mapbox extends Component<Props> {
     const { accessToken } = props;
 
     this.#setRef = (container) => {
+      if (!container) return;
+
       const map = new Map({
         accessToken,
         container,
         style: "mapbox://styles/betsecure/clm06v5k900a501r87g7g5qc3",
+        fadeDuration: 0,
         bounds: [
           [minimumLng, minimumLat],
           [maximumLng, maximumLat],
@@ -32,10 +35,6 @@ export class Mapbox extends Component<Props> {
         map.addSource("transactions", {
           type: "geojson",
           data: this.props.featuresURL,
-          cluster: true,
-          clusterProperties: {
-            isLatest: ["any", ["get", "isLatest"], false],
-          },
         });
 
         map.addLayer({
@@ -43,6 +42,8 @@ export class Mapbox extends Component<Props> {
           type: "symbol",
           source: "transactions",
           layout: {
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
             "icon-image": [
               "case",
               ["==", ["get", "isLatest"], true],
@@ -50,6 +51,7 @@ export class Mapbox extends Component<Props> {
               "mapbox-marker-icon-purple",
             ],
             "icon-size": ["case", ["==", ["get", "isLatest"], true], 2, 1],
+            "symbol-z-order": "source",
           },
         });
       });

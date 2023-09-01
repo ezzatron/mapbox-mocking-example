@@ -24,7 +24,7 @@ export default function Home({ mapboxToken }: Props) {
   useEffect(() => {
     const interval = setInterval(() => {
       setTimestamp(Date.now());
-    }, 3000);
+    }, 60000);
 
     return () => {
       clearInterval(interval);

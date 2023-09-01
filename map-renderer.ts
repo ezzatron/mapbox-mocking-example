@@ -27,6 +27,23 @@ export function createMapRenderer(createMap: CreateMap): MapRenderer {
     render(features: Features) {
       const map = getMap(features);
 
+      map.addSource("transactions", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: features.transactions.map((transaction) => ({
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [transaction.coords.lng, transaction.coords.lat],
+            },
+            properties: {
+              id: transaction.id,
+            },
+          })),
+        },
+      });
+
       // TODO
     },
   };

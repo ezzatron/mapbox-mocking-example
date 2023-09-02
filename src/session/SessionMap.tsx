@@ -2,10 +2,11 @@ import { FeatureCollection } from "geojson";
 import { GeoJSONSource, Map } from "mapbox-gl";
 import { Component } from "react";
 import { maximumLat, maximumLng, minimumLat, minimumLng } from "src/bounds";
+import styles from "./SessionMap.module.css";
 
 type Props = {
   accessToken: string;
-  transactions: FeatureCollection;
+  features: FeatureCollection;
 };
 
 export default class SessionMap extends Component<Props> {
@@ -30,15 +31,15 @@ export default class SessionMap extends Component<Props> {
       this.#map = map;
 
       map.on("load", () => {
-        map.addSource("transactions", {
+        map.addSource("features", {
           type: "geojson",
-          data: this.props.transactions,
+          data: this.props.features,
         });
 
         map.addLayer({
-          id: "transactions",
+          id: "features",
           type: "symbol",
-          source: "transactions",
+          source: "features",
           layout: {
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
@@ -56,9 +57,9 @@ export default class SessionMap extends Component<Props> {
 
       map.on("sourcedata", (event) => {
         if (this.#featureSource) return;
-        if (event.sourceId !== "transactions" || !event.isSourceLoaded) return;
+        if (event.sourceId !== "features" || !event.isSourceLoaded) return;
 
-        const source = map.getSource("transactions");
+        const source = map.getSource("features");
         if (source.type !== "geojson") return;
 
         this.#featureSource = source;
@@ -66,9 +67,9 @@ export default class SessionMap extends Component<Props> {
     };
   }
 
-  componentDidUpdate({ transactions }: Props): void {
-    if (this.props.transactions !== transactions) {
-      this.#featureSource?.setData(this.props.transactions);
+  componentDidUpdate({ features }: Props): void {
+    if (this.props.features !== features) {
+      this.#featureSource?.setData(this.props.features);
     }
   }
 
@@ -77,7 +78,7 @@ export default class SessionMap extends Component<Props> {
   }
 
   render() {
-    return <div ref={this.#setRef}></div>;
+    return <div ref={this.#setRef} className={styles.map}></div>;
   }
 
   readonly #setRef: (container: HTMLDivElement) => void;

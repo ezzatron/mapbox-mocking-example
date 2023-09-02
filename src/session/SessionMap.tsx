@@ -47,6 +47,8 @@ export default class SessionMap extends Component<Props> {
               "case",
               ["==", ["get", "isLatest"], true],
               "mapbox-marker-icon-pink",
+              ["==", ["get", "isNew"], true],
+              "mapbox-marker-icon-pink",
               "mapbox-marker-icon-purple",
             ],
             "icon-size": ["case", ["==", ["get", "isLatest"], true], 2, 1],

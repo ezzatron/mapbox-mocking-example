@@ -29,7 +29,7 @@ export default function map(
       },
       properties: {
         id: `TXN${i.toString().padStart(4, "0")}}`,
-        isLatest: i === transactionCount - 1,
+        isLatest: i === transactionCount - 1 ? true : undefined,
       },
     });
   }

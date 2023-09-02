@@ -1,5 +1,5 @@
-import { FeatureCollection } from "geojson";
-import { useReducer } from "react";
+import { FeatureCollection, Geometry } from "geojson";
+import { useMemo, useReducer } from "react";
 import { fetcher } from "src/fetcher";
 import hash from "stable-hash";
 import useSWR from "swr";
@@ -11,7 +11,17 @@ const LOAD = "LOAD";
 const RELOAD = "RELOAD";
 const DISMISS = "DISMISS";
 
-const emptyFeatures: FeatureCollection = {
+type SessionFeatureProperties = {
+  id: string;
+  isNew?: boolean;
+  isLatest?: boolean;
+};
+type SessionFeatureCollection = FeatureCollection<
+  Geometry,
+  SessionFeatureProperties
+>;
+
+const emptyFeatures: SessionFeatureCollection = {
   type: "FeatureCollection",
   features: [],
 };
@@ -20,6 +30,7 @@ const initialState: State = {
   features: emptyFeatures,
   latestFeatures: emptyFeatures,
   isUpdateDismissed: false,
+  newTransactions: new Set(),
 };
 
 type Props = {
@@ -30,7 +41,7 @@ type Props = {
 export default function SessionMapContainer({ accessToken, sessionId }: Props) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  useSWR<FeatureCollection>(
+  useSWR<SessionFeatureCollection>(
     `/api/session/${encodeURIComponent(sessionId)}/map`,
     {
       fetcher,
@@ -41,9 +52,27 @@ export default function SessionMapContainer({ accessToken, sessionId }: Props) {
     },
   );
 
+  const { features, newTransactions } = state;
+
+  // Add the isNew property to the new features.
+  const featuresWithNew = useMemo(() => {
+    return {
+      ...features,
+      features: features.features.map((feature) => {
+        return {
+          ...feature,
+          properties: {
+            ...feature.properties,
+            isNew: newTransactions.has(feature.properties.id),
+          },
+        };
+      }),
+    };
+  }, [features, newTransactions]);
+
   return (
     <div className={styles.container}>
-      <SessionMap accessToken={accessToken} features={state.features} />
+      <SessionMap accessToken={accessToken} features={featuresWithNew} />
 
       {hasUpdate(state) && (
         <ReloadMapDialog
@@ -61,15 +90,16 @@ export default function SessionMapContainer({ accessToken, sessionId }: Props) {
 }
 
 type State = {
-  features: FeatureCollection;
-  latestFeatures: FeatureCollection;
+  features: SessionFeatureCollection;
+  latestFeatures: SessionFeatureCollection;
   isUpdateDismissed: boolean;
+  newTransactions: Set<string>;
 };
 
 type Action =
   | {
       type: typeof LOAD;
-      payload: { features: FeatureCollection };
+      payload: { features: SessionFeatureCollection };
     }
   | {
       type: typeof RELOAD;
@@ -103,7 +133,21 @@ function reducer(state: State, action: Action) {
     }
 
     case RELOAD: {
-      return { ...state, features: state.latestFeatures };
+      const { features, latestFeatures } = state;
+      const newTransactions = new Set<string>();
+
+      const existingIds = new Set(
+        features.features.map((feature) => feature.properties.id),
+      );
+      const latestIds = new Set(
+        latestFeatures.features.map((feature) => feature.properties.id),
+      );
+
+      for (const id of latestIds) {
+        if (!existingIds.has(id)) newTransactions.add(id);
+      }
+
+      return { ...state, features: latestFeatures, newTransactions };
     }
 
     case DISMISS: {

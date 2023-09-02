@@ -37,7 +37,33 @@ export default class SessionMap extends Component<Props> {
         });
 
         map.addLayer({
-          id: "features",
+          id: "accuracy",
+          type: "circle",
+          source: "features",
+          paint: {
+            "circle-color": "white",
+            "circle-opacity": 0.05,
+
+            // Draw accuracy radii scaled to the zoom level.
+            // See https://stackoverflow.com/a/70458439/736156
+            "circle-radius": [
+              "interpolate",
+              ["exponential", 2],
+              ["zoom"],
+              0,
+              0,
+              20,
+              [
+                "/",
+                ["/", ["get", "accuracy"], 0.075],
+                ["cos", ["*", ["get", "lat"], ["/", Math.PI, 180]]],
+              ],
+            ],
+          },
+        });
+
+        map.addLayer({
+          id: "markers",
           type: "symbol",
           source: "features",
           layout: {

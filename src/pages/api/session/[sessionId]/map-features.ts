@@ -1,15 +1,16 @@
-import { Feature, FeatureCollection } from "geojson";
+import { Feature, Geometry } from "geojson";
 import type { NextApiRequest, NextApiResponse } from "next";
 import seedrandom from "seedrandom";
+import { MapFeaturesResponse, SessionFeatureProperties } from "src/api/types";
 import { maximumLat, maximumLng, minimumLat, minimumLng } from "src/bounds";
 import { startTime } from "../../../../start-time";
 
 const minimumAccuracy = 6;
 const maximumAccuracy = 500;
 
-export default function map(
+export default function mapFeatures(
   req: NextApiRequest,
-  res: NextApiResponse<FeatureCollection>,
+  res: NextApiResponse<MapFeaturesResponse>,
 ) {
   const { sessionId = "" } = req.query;
   const requestTime = Date.now();
@@ -18,13 +19,17 @@ export default function map(
   const transactionCount =
     10 + Math.floor((Number(requestTime) - Number(startTime)) / 3000);
 
-  const features: Feature[] = [];
+  const features: Feature<Geometry, SessionFeatureProperties>[] = [];
+  let latest: string = "";
 
   for (let i = 0; i < transactionCount; i++) {
     const lat = random() * (maximumLat - minimumLat) + minimumLat;
     const lng = random() * (maximumLng - minimumLng) + minimumLng;
     const accuracy =
       random() * (maximumAccuracy - minimumAccuracy) + minimumAccuracy;
+
+    const id = `TXN${i.toString().padStart(4, "0")}`;
+    latest = id;
 
     features.push({
       type: "Feature",
@@ -33,13 +38,16 @@ export default function map(
         coordinates: [lng, lat],
       },
       properties: {
-        id: `TXN${i.toString().padStart(4, "0")}}`,
-        lat, // duplicated here to allow rendering of accuracy radii
         accuracy,
+        id,
         isLatest: i === transactionCount - 1 ? true : undefined,
+        lat, // duplicated here to allow rendering of accuracy radii
       },
     });
   }
 
-  res.status(200).json({ type: "FeatureCollection", features });
+  res.status(200).json({
+    latest,
+    features: { type: "FeatureCollection", features },
+  });
 }

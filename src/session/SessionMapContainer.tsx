@@ -1,25 +1,19 @@
-import { FeatureCollection, Geometry } from "geojson";
-import { useMemo, useReducer } from "react";
+import { useCallback, useEffect, useReducer } from "react";
+import {
+  LatestTransactionResponse,
+  MapFeaturesResponse,
+  SessionFeatureCollection,
+} from "src/api/types";
 import { fetcher } from "src/fetcher";
-import hash from "stable-hash";
 import useSWR from "swr";
 import ReloadMapDialog from "./ReloadMapDialog";
 import SessionMap from "./SessionMap";
 import styles from "./SessionMapContainer.module.css";
 
-const LOAD = "LOAD";
-const RELOAD = "RELOAD";
 const DISMISS = "DISMISS";
-
-type SessionFeatureProperties = {
-  id: string;
-  isNew?: boolean;
-  isLatest?: boolean;
-};
-type SessionFeatureCollection = FeatureCollection<
-  Geometry,
-  SessionFeatureProperties
->;
+const LOAD_ERROR = "LOAD_ERROR";
+const LOAD_FEATURES = "LOAD_FEATURES";
+const LOAD_LATEST = "LOAD_LATEST";
 
 const emptyFeatures: SessionFeatureCollection = {
   type: "FeatureCollection",
@@ -28,9 +22,10 @@ const emptyFeatures: SessionFeatureCollection = {
 
 const initialState: State = {
   features: emptyFeatures,
-  latestFeatures: emptyFeatures,
+  current: "",
+  latest: "",
   isUpdateDismissed: false,
-  newTransactions: new Set(),
+  isLoadError: false,
 };
 
 type Props = {
@@ -41,44 +36,46 @@ type Props = {
 export default function SessionMapContainer({ accessToken, sessionId }: Props) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  useSWR<SessionFeatureCollection>(
-    `/api/session/${encodeURIComponent(sessionId)}/map`,
+  useSWR<LatestTransactionResponse>(
+    `/api/session/${encodeURIComponent(sessionId)}/latest-transaction`,
     {
       fetcher,
       refreshInterval: 5000,
-      onSuccess: (features) => {
-        dispatch({ type: LOAD, payload: { features } });
+      onSuccess: (payload) => {
+        dispatch({ type: LOAD_LATEST, payload });
       },
     },
   );
 
-  const { features, newTransactions } = state;
+  // TODO: use useSWR conditionally instead?
+  const loadFeatures = useCallback(() => {
+    fetch(`/api/session/${encodeURIComponent(sessionId)}/map-features`)
+      .then((response) => {
+        if (!response.ok) throw new Error("Unexpected status");
 
-  // Add the isNew property to the new features.
-  const featuresWithNew = useMemo(() => {
-    return {
-      ...features,
-      features: features.features.map((feature) => {
-        return {
-          ...feature,
-          properties: {
-            ...feature.properties,
-            isNew: newTransactions.has(feature.properties.id),
-          },
-        };
-      }),
-    };
-  }, [features, newTransactions]);
+        return response.json();
+      })
+      .then((payload) => {
+        dispatch({ type: LOAD_FEATURES, payload });
+      })
+      .catch(() => {
+        dispatch({ type: LOAD_ERROR });
+      });
+  }, []);
+
+  useEffect(() => {
+    loadFeatures();
+  }, [loadFeatures]);
 
   return (
     <div className={styles.container}>
-      <SessionMap accessToken={accessToken} features={featuresWithNew} />
+      <SessionMap accessToken={accessToken} features={state.features} />
 
       {hasUpdate(state) && (
         <ReloadMapDialog
           onClose={(event) => {
             if (event.currentTarget.returnValue === "reload") {
-              dispatch({ type: RELOAD });
+              loadFeatures();
             } else {
               dispatch({ type: DISMISS });
             }
@@ -91,18 +88,23 @@ export default function SessionMapContainer({ accessToken, sessionId }: Props) {
 
 type State = {
   features: SessionFeatureCollection;
-  latestFeatures: SessionFeatureCollection;
+  current: string;
+  latest: string;
   isUpdateDismissed: boolean;
-  newTransactions: Set<string>;
+  isLoadError: boolean;
 };
 
 type Action =
   | {
-      type: typeof LOAD;
-      payload: { features: SessionFeatureCollection };
+      type: typeof LOAD_ERROR;
     }
   | {
-      type: typeof RELOAD;
+      type: typeof LOAD_FEATURES;
+      payload: MapFeaturesResponse;
+    }
+  | {
+      type: typeof LOAD_LATEST;
+      payload: LatestTransactionResponse;
     }
   | {
       type: typeof DISMISS;
@@ -110,44 +112,24 @@ type Action =
 
 function reducer(state: State, action: Action) {
   switch (action.type) {
-    case LOAD: {
-      const { features, latestFeatures } = state;
-      const { features: payloadFeatures } = action.payload;
-
-      // If the features are empty, this is the first load.
-      if (features === emptyFeatures) {
-        return {
-          ...state,
-          features: payloadFeatures,
-          latestFeatures: payloadFeatures,
-        };
-      }
-
-      // If the features haven't changed, do nothing.
-      // Normally SWR would handle this, but we're using onSuccess.
-      const latestFeaturesHash = latestFeatures ? hash(latestFeatures) : "";
-      const payloadFeaturesHash = hash(payloadFeatures);
-      if (latestFeaturesHash === payloadFeaturesHash) return state;
-
-      return { ...state, latestFeatures: payloadFeatures };
+    case LOAD_ERROR: {
+      return { ...state, isLoadError: true };
     }
 
-    case RELOAD: {
-      const { features, latestFeatures } = state;
-      const newTransactions = new Set<string>();
+    case LOAD_LATEST: {
+      return { ...state, latest: action.payload.latest };
+    }
 
-      const existingIds = new Set(
-        features.features.map((feature) => feature.properties.id),
-      );
-      const latestIds = new Set(
-        latestFeatures.features.map((feature) => feature.properties.id),
-      );
+    case LOAD_FEATURES: {
+      const { features, latest } = action.payload;
 
-      for (const id of latestIds) {
-        if (!existingIds.has(id)) newTransactions.add(id);
-      }
-
-      return { ...state, features: latestFeatures, newTransactions };
+      return {
+        ...state,
+        features,
+        latest,
+        current: latest,
+        isLoadError: false,
+      };
     }
 
     case DISMISS: {
@@ -159,7 +141,7 @@ function reducer(state: State, action: Action) {
 }
 
 function hasUpdate(state: State) {
-  const { features, latestFeatures, isUpdateDismissed } = state;
+  const { isUpdateDismissed, current, latest } = state;
 
-  return !isUpdateDismissed && features !== latestFeatures;
+  return !isUpdateDismissed && latest !== current;
 }

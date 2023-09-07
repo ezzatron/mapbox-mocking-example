@@ -6,11 +6,13 @@ import {
 } from "src/api/types";
 import { fetcher } from "src/fetcher";
 import useSWR from "swr";
+import MapErrorDialog from "./MapErrorDialog";
 import ReloadMapDialog from "./ReloadMapDialog";
 import SessionMap from "./SessionMap";
 import styles from "./SessionMapContainer.module.css";
 
-const DISMISS = "DISMISS";
+const DISMISS_ERROR = "DISMISS_ERROR";
+const DISMISS_UPDATE = "DISMISS_UPDATE";
 const LOAD_ERROR = "LOAD_ERROR";
 const LOAD_FEATURES = "LOAD_FEATURES";
 const LOAD_LATEST = "LOAD_LATEST";
@@ -37,7 +39,7 @@ type Props = {
 
 export default function SessionMapContainer({ accessToken, sessionId }: Props) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const { shouldLoad, features, current } = state;
+  const { features, current, isLoadError } = state;
 
   useSWR<LatestTransactionResponse>(
     `/api/session/${encodeURIComponent(sessionId)}/latest-transaction`,
@@ -47,11 +49,14 @@ export default function SessionMapContainer({ accessToken, sessionId }: Props) {
       onSuccess: (payload) => {
         dispatch({ type: LOAD_LATEST, payload });
       },
+      onError: () => {
+        dispatch({ type: LOAD_ERROR });
+      },
     },
   );
 
   useSWR<MapFeaturesResponse>(
-    shouldLoad
+    shouldLoad(state)
       ? `/api/session/${encodeURIComponent(
           sessionId,
         )}/map-features?since=${encodeURIComponent(current)}`
@@ -60,6 +65,9 @@ export default function SessionMapContainer({ accessToken, sessionId }: Props) {
       fetcher,
       onSuccess: (payload) => {
         dispatch({ type: LOAD_FEATURES, payload });
+      },
+      onError: () => {
+        dispatch({ type: LOAD_ERROR });
       },
     },
   );
@@ -74,8 +82,16 @@ export default function SessionMapContainer({ accessToken, sessionId }: Props) {
             if (event.currentTarget.returnValue === "reload") {
               dispatch({ type: RELOAD });
             } else {
-              dispatch({ type: DISMISS });
+              dispatch({ type: DISMISS_UPDATE });
             }
+          }}
+        />
+      )}
+
+      {isLoadError && (
+        <MapErrorDialog
+          onClose={() => {
+            dispatch({ type: DISMISS_ERROR });
           }}
         />
       )}
@@ -94,7 +110,10 @@ type State = {
 
 type Action =
   | {
-      type: typeof DISMISS;
+      type: typeof DISMISS_ERROR;
+    }
+  | {
+      type: typeof DISMISS_UPDATE;
     }
   | {
       type: typeof LOAD_ERROR;
@@ -113,7 +132,11 @@ type Action =
 
 function reducer(state: State, action: Action) {
   switch (action.type) {
-    case DISMISS: {
+    case DISMISS_ERROR: {
+      return { ...state, isLoadError: false };
+    }
+
+    case DISMISS_UPDATE: {
       return { ...state, isUpdateDismissed: true };
     }
 
@@ -150,7 +173,13 @@ function reducer(state: State, action: Action) {
 }
 
 function hasUpdate(state: State) {
-  const { isUpdateDismissed, current, latest } = state;
+  const { isLoadError, isUpdateDismissed, current, latest } = state;
 
-  return !isUpdateDismissed && latest !== current;
+  return !isLoadError && !isUpdateDismissed && latest !== current;
+}
+
+function shouldLoad(state: State) {
+  const { isLoadError, shouldLoad } = state;
+
+  return !isLoadError && shouldLoad;
 }

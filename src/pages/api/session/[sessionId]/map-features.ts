@@ -12,6 +12,8 @@ export default function mapFeatures(
   req: NextApiRequest,
   res: NextApiResponse<MapFeaturesResponse>,
 ) {
+  throw new Error("asdasdasd");
+
   const { sessionId = "", since = "" } = req.query;
   const requestTime = Date.now();
 

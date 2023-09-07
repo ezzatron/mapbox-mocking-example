@@ -42,7 +42,12 @@ export default class SessionMap extends Component<Props> {
           source: "features",
           paint: {
             "circle-color": "white",
-            "circle-opacity": 0.05,
+            "circle-opacity": [
+              "case",
+              ["==", ["get", "isLatest"], true],
+              0.1,
+              0,
+            ],
 
             // Draw accuracy radii scaled to the zoom level.
             // See https://stackoverflow.com/a/70458439/736156

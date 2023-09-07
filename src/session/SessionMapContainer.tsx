@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer } from "react";
+import { useReducer } from "react";
 import {
   LatestTransactionResponse,
   MapFeaturesResponse,
@@ -14,6 +14,7 @@ const DISMISS = "DISMISS";
 const LOAD_ERROR = "LOAD_ERROR";
 const LOAD_FEATURES = "LOAD_FEATURES";
 const LOAD_LATEST = "LOAD_LATEST";
+const RELOAD = "RELOAD";
 
 const emptyFeatures: SessionFeatureCollection = {
   type: "FeatureCollection",
@@ -24,6 +25,7 @@ const initialState: State = {
   features: emptyFeatures,
   current: "",
   latest: "",
+  shouldLoad: true,
   isUpdateDismissed: false,
   isLoadError: false,
 };
@@ -35,6 +37,7 @@ type Props = {
 
 export default function SessionMapContainer({ accessToken, sessionId }: Props) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const { shouldLoad, features, current } = state;
 
   useSWR<LatestTransactionResponse>(
     `/api/session/${encodeURIComponent(sessionId)}/latest-transaction`,
@@ -47,35 +50,29 @@ export default function SessionMapContainer({ accessToken, sessionId }: Props) {
     },
   );
 
-  // TODO: use useSWR conditionally instead?
-  const loadFeatures = useCallback(() => {
-    fetch(`/api/session/${encodeURIComponent(sessionId)}/map-features`)
-      .then((response) => {
-        if (!response.ok) throw new Error("Unexpected status");
-
-        return response.json();
-      })
-      .then((payload) => {
+  useSWR<MapFeaturesResponse>(
+    shouldLoad
+      ? `/api/session/${encodeURIComponent(
+          sessionId,
+        )}/map-features?since=${encodeURIComponent(current)}`
+      : null,
+    {
+      fetcher,
+      onSuccess: (payload) => {
         dispatch({ type: LOAD_FEATURES, payload });
-      })
-      .catch(() => {
-        dispatch({ type: LOAD_ERROR });
-      });
-  }, []);
-
-  useEffect(() => {
-    loadFeatures();
-  }, [loadFeatures]);
+      },
+    },
+  );
 
   return (
     <div className={styles.container}>
-      <SessionMap accessToken={accessToken} features={state.features} />
+      <SessionMap accessToken={accessToken} features={features} />
 
       {hasUpdate(state) && (
         <ReloadMapDialog
           onClose={(event) => {
             if (event.currentTarget.returnValue === "reload") {
-              loadFeatures();
+              dispatch({ type: RELOAD });
             } else {
               dispatch({ type: DISMISS });
             }
@@ -90,11 +87,15 @@ type State = {
   features: SessionFeatureCollection;
   current: string;
   latest: string;
+  shouldLoad: boolean;
   isUpdateDismissed: boolean;
   isLoadError: boolean;
 };
 
 type Action =
+  | {
+      type: typeof DISMISS;
+    }
   | {
       type: typeof LOAD_ERROR;
     }
@@ -107,17 +108,24 @@ type Action =
       payload: LatestTransactionResponse;
     }
   | {
-      type: typeof DISMISS;
+      type: typeof RELOAD;
     };
 
 function reducer(state: State, action: Action) {
   switch (action.type) {
+    case DISMISS: {
+      return { ...state, isUpdateDismissed: true };
+    }
+
     case LOAD_ERROR: {
       return { ...state, isLoadError: true };
     }
 
     case LOAD_LATEST: {
-      return { ...state, latest: action.payload.latest };
+      const { current } = state;
+      const { latest } = action.payload;
+
+      return { ...state, latest, current: current || latest };
     }
 
     case LOAD_FEATURES: {
@@ -128,12 +136,13 @@ function reducer(state: State, action: Action) {
         features,
         latest,
         current: latest,
+        shouldLoad: false,
         isLoadError: false,
       };
     }
 
-    case DISMISS: {
-      return { ...state, isUpdateDismissed: true };
+    case RELOAD: {
+      return { ...state, shouldLoad: true, isLoadError: false };
     }
   }
 

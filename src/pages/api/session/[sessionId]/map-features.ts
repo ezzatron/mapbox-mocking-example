@@ -12,7 +12,7 @@ export default function mapFeatures(
   req: NextApiRequest,
   res: NextApiResponse<MapFeaturesResponse>,
 ) {
-  const { sessionId = "" } = req.query;
+  const { sessionId = "", since = "" } = req.query;
   const requestTime = Date.now();
 
   const random = seedrandom(JSON.stringify([startTime, sessionId]));
@@ -21,6 +21,7 @@ export default function mapFeatures(
 
   const features: Feature<Geometry, SessionFeatureProperties>[] = [];
   let latest: string = "";
+  let sinceSeen = false;
 
   for (let i = 0; i < transactionCount; i++) {
     const lat = random() * (maximumLat - minimumLat) + minimumLat;
@@ -31,6 +32,8 @@ export default function mapFeatures(
     const id = `TXN${i.toString().padStart(4, "0")}`;
     latest = id;
 
+    const isLatest = i === transactionCount - 1;
+
     features.push({
       type: "Feature",
       geometry: {
@@ -40,10 +43,13 @@ export default function mapFeatures(
       properties: {
         accuracy,
         id,
-        isLatest: i === transactionCount - 1 ? true : undefined,
+        isNew: isLatest || sinceSeen ? true : undefined,
+        isLatest: isLatest ? true : undefined,
         lat, // duplicated here to allow rendering of accuracy radii
       },
     });
+
+    sinceSeen = sinceSeen || id === since;
   }
 
   res.status(200).json({

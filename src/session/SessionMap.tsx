@@ -71,8 +71,6 @@ export default class SessionMap extends Component<Props> {
             "icon-ignore-placement": true,
             "icon-image": [
               "case",
-              ["==", ["get", "isLatest"], true],
-              "mapbox-marker-icon-pink",
               ["==", ["get", "isNew"], true],
               "mapbox-marker-icon-pink",
               "mapbox-marker-icon-purple",

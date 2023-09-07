@@ -3,7 +3,7 @@ import { LatestTransactionResponse } from "src/api/types";
 import { startTime } from "../../../../start-time";
 
 export default function latestTransaction(
-  req: NextApiRequest,
+  _: NextApiRequest,
   res: NextApiResponse<LatestTransactionResponse>,
 ) {
   const requestTime = Date.now();

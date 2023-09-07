@@ -1,8 +1,9 @@
-import { useReducer } from "react";
+import { useCallback, useReducer } from "react";
 import {
   LatestTransactionResponse,
   MapFeaturesResponse,
-  SessionFeatureCollection,
+  TransactionAccuracyResponse,
+  TransactionFeatureCollection,
 } from "src/api/types";
 import { fetcher } from "src/fetcher";
 import useSWR from "swr";
@@ -13,12 +14,14 @@ import styles from "./SessionMapContainer.module.css";
 
 const DISMISS_ERROR = "DISMISS_ERROR";
 const DISMISS_UPDATE = "DISMISS_UPDATE";
+const LOAD_ACCURACY = "LOAD_ACCURACY";
 const LOAD_ERROR = "LOAD_ERROR";
 const LOAD_FEATURES = "LOAD_FEATURES";
 const LOAD_LATEST = "LOAD_LATEST";
 const RELOAD = "RELOAD";
+const SELECT_TRANSACTION = "SELECT_TRANSACTION";
 
-const emptyFeatures: SessionFeatureCollection = {
+const emptyFeatures: TransactionFeatureCollection = {
   type: "FeatureCollection",
   features: [],
 };
@@ -27,6 +30,8 @@ const initialState: State = {
   features: emptyFeatures,
   current: "",
   latest: "",
+  selected: "",
+  accuracy: undefined,
   shouldLoad: true,
   isUpdateDismissed: false,
   isLoadError: false,
@@ -39,7 +44,7 @@ type Props = {
 
 export default function SessionMapContainer({ accessToken, sessionId }: Props) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const { features, current, isLoadError } = state;
+  const { features, current, selected, isLoadError } = state;
 
   useSWR<LatestTransactionResponse>(
     `/api/session/${encodeURIComponent(sessionId)}/latest-transaction`,
@@ -72,9 +77,36 @@ export default function SessionMapContainer({ accessToken, sessionId }: Props) {
     },
   );
 
+  useSWR<TransactionAccuracyResponse>(
+    selected
+      ? `/api/session/${encodeURIComponent(sessionId)}/${encodeURIComponent(
+          selected,
+        )}/accuracy`
+      : null,
+    {
+      fetcher,
+      onSuccess: (payload) => {
+        dispatch({ type: LOAD_ACCURACY, payload });
+      },
+      onError: () => {
+        dispatch({ type: LOAD_ERROR });
+      },
+    },
+  );
+
+  const selectTransaction = useCallback((payload: string) => {
+    dispatch({ type: SELECT_TRANSACTION, payload });
+  }, []);
+
   return (
     <div className={styles.container}>
-      <SessionMap accessToken={accessToken} features={features} />
+      <SessionMap
+        accessToken={accessToken}
+        features={features}
+        selected={selected}
+        accuracy={getAccuracy(state)}
+        selectTransaction={selectTransaction}
+      />
 
       {hasUpdate(state) && (
         <ReloadMapDialog
@@ -100,9 +132,11 @@ export default function SessionMapContainer({ accessToken, sessionId }: Props) {
 }
 
 type State = {
-  features: SessionFeatureCollection;
+  features: TransactionFeatureCollection;
   current: string;
   latest: string;
+  selected: string;
+  accuracy: TransactionAccuracyResponse | undefined;
   shouldLoad: boolean;
   isUpdateDismissed: boolean;
   isLoadError: boolean;
@@ -114,6 +148,10 @@ type Action =
     }
   | {
       type: typeof DISMISS_UPDATE;
+    }
+  | {
+      type: typeof LOAD_ACCURACY;
+      payload: TransactionAccuracyResponse;
     }
   | {
       type: typeof LOAD_ERROR;
@@ -128,6 +166,10 @@ type Action =
     }
   | {
       type: typeof RELOAD;
+    }
+  | {
+      type: typeof SELECT_TRANSACTION;
+      payload: string;
     };
 
 function reducer(state: State, action: Action) {
@@ -138,6 +180,10 @@ function reducer(state: State, action: Action) {
 
     case DISMISS_UPDATE: {
       return { ...state, isUpdateDismissed: true };
+    }
+
+    case LOAD_ACCURACY: {
+      return { ...state, accuracy: action.payload };
     }
 
     case LOAD_ERROR: {
@@ -152,13 +198,16 @@ function reducer(state: State, action: Action) {
     }
 
     case LOAD_FEATURES: {
-      const { features, latest } = action.payload;
+      const { features, selected } = state;
+      const { features: loadedFeatures, latest } = action.payload;
+      const isFirstLoad = features === emptyFeatures;
 
       return {
         ...state,
-        features,
+        features: loadedFeatures,
         latest,
         current: latest,
+        selected: isFirstLoad ? latest : selected,
         shouldLoad: false,
         isLoadError: false,
       };
@@ -166,6 +215,10 @@ function reducer(state: State, action: Action) {
 
     case RELOAD: {
       return { ...state, shouldLoad: true, isLoadError: false };
+    }
+
+    case SELECT_TRANSACTION: {
+      return { ...state, selected: action.payload };
     }
   }
 
@@ -182,4 +235,10 @@ function shouldLoad(state: State) {
   const { isLoadError, shouldLoad } = state;
 
   return !isLoadError && shouldLoad;
+}
+
+function getAccuracy(state: State) {
+  const { accuracy, selected } = state;
+
+  return accuracy?.transactionId === selected ? accuracy.accuracy : undefined;
 }

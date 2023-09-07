@@ -1,12 +1,19 @@
-import { FeatureCollection } from "geojson";
+import { Feature, Polygon } from "geojson";
 import { GeoJSONSource, Map } from "mapbox-gl";
 import { Component } from "react";
+import {
+  TransactionFeature,
+  TransactionFeatureCollection,
+} from "src/api/types";
 import { maximumLat, maximumLng, minimumLat, minimumLng } from "src/bounds";
 import styles from "./SessionMap.module.css";
 
 type Props = {
   accessToken: string;
-  features: FeatureCollection;
+  features: TransactionFeatureCollection;
+  selected: string;
+  accuracy?: Feature<Polygon>;
+  selectTransaction: (id: string) => void;
 };
 
 export default class SessionMap extends Component<Props> {
@@ -33,37 +40,22 @@ export default class SessionMap extends Component<Props> {
       map.on("load", () => {
         map.addSource("features", {
           type: "geojson",
-          data: this.props.features,
+          data: this.#features,
+        });
+
+        map.addSource("accuracy", {
+          type: "geojson",
+          data: this.#accuracy,
         });
 
         map.addLayer({
           id: "accuracy",
-          type: "circle",
-          source: "features",
+          type: "fill",
+          source: "accuracy",
+          layout: {},
           paint: {
-            "circle-color": "white",
-            "circle-opacity": [
-              "case",
-              ["==", ["get", "isLatest"], true],
-              0.1,
-              0,
-            ],
-
-            // Draw accuracy radii scaled to the zoom level.
-            // See https://stackoverflow.com/a/70458439/736156
-            "circle-radius": [
-              "interpolate",
-              ["exponential", 2],
-              ["zoom"],
-              0,
-              0,
-              20,
-              [
-                "/",
-                ["/", ["get", "accuracy"], 0.075],
-                ["cos", ["*", ["get", "lat"], ["/", Math.PI, 180]]],
-              ],
-            ],
+            "fill-color": "white", // blue color fill
+            "fill-opacity": 0.1,
           },
         });
 
@@ -76,31 +68,57 @@ export default class SessionMap extends Component<Props> {
             "icon-ignore-placement": true,
             "icon-image": [
               "case",
+              ["==", ["get", "isSelected"], true],
+              "mapbox-marker-icon-red",
+              ["==", ["get", "isLatest"], true],
+              "mapbox-marker-icon-orange",
               ["==", ["get", "isNew"], true],
               "mapbox-marker-icon-pink",
               "mapbox-marker-icon-purple",
             ],
-            "icon-size": ["case", ["==", ["get", "isLatest"], true], 2, 1],
+            "icon-size": ["case", ["==", ["get", "isSelected"], true], 2, 1],
             "symbol-z-order": "source",
           },
+        });
+
+        map.on("click", "markers", (event) => {
+          if (!event.features) return;
+          const feature = event.features[0] as unknown as TransactionFeature;
+
+          this.props.selectTransaction(feature ? feature.properties.id : "");
         });
       });
 
       map.on("sourcedata", (event) => {
-        if (this.#featureSource) return;
-        if (event.sourceId !== "features" || !event.isSourceLoaded) return;
+        if (!event.isSourceLoaded) return;
 
-        const source = map.getSource("features");
-        if (source.type !== "geojson") return;
+        if (event.sourceId === "features") {
+          if (this.#featureSource) return;
 
-        this.#featureSource = source;
+          const source = map.getSource("features");
+          if (source.type !== "geojson") return;
+
+          this.#featureSource = source;
+        }
+
+        if (event.sourceId === "accuracy") {
+          if (this.#accuracySource) return;
+
+          const source = map.getSource("accuracy");
+          if (source.type !== "geojson") return;
+
+          this.#accuracySource = source;
+        }
       });
     };
   }
 
-  componentDidUpdate({ features }: Props): void {
-    if (this.props.features !== features) {
-      this.#featureSource?.setData(this.props.features);
+  componentDidUpdate({ features, selected, accuracy }: Props): void {
+    if (this.props.features !== features || this.props.selected !== selected) {
+      this.#featureSource?.setData(this.#features);
+    }
+    if (this.props.accuracy !== accuracy) {
+      this.#accuracySource?.setData(this.#accuracy);
     }
   }
 
@@ -112,7 +130,36 @@ export default class SessionMap extends Component<Props> {
     return <div ref={this.#setRef} className={styles.map}></div>;
   }
 
+  get #accuracy(): Feature<Polygon> {
+    return (
+      this.props.accuracy ?? {
+        type: "Feature",
+        geometry: {
+          type: "Polygon",
+          coordinates: [],
+        },
+        properties: {},
+      }
+    );
+  }
+
+  get #features(): TransactionFeatureCollection {
+    const { features, selected } = this.props;
+
+    return {
+      ...features,
+      features: features.features.map((feature) => ({
+        ...feature,
+        properties: {
+          ...feature.properties,
+          isSelected: feature.properties.id === selected ? true : undefined,
+        },
+      })),
+    };
+  }
+
   readonly #setRef: (container: HTMLDivElement) => void;
   #map: Map | undefined;
+  #accuracySource: GeoJSONSource | undefined;
   #featureSource: GeoJSONSource | undefined;
 }

@@ -1,16 +1,21 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import generateFeatures from "src/api/generate-features";
 import { LatestTransactionResponse } from "src/api/types";
-import { startTime } from "../../../../start-time";
 
 export default function latestTransaction(
-  _: NextApiRequest,
+  req: NextApiRequest,
   res: NextApiResponse<LatestTransactionResponse>,
 ) {
-  const requestTime = Date.now();
-  const transactionCount =
-    10 + Math.floor((Number(requestTime) - Number(startTime)) / 3000);
+  const { sessionId, since = "" } = req.query;
 
-  res.status(200).json({
-    latest: `TXN${(transactionCount - 1).toString().padStart(4, "0")}`,
-  });
+  if (typeof sessionId !== "string" || typeof since !== "string") {
+    res.status(400);
+    return;
+  }
+
+  const features = generateFeatures(sessionId, since);
+  const latest =
+    features.features[features.features.length - 1]?.properties.id ?? "";
+
+  res.status(200).json({ latest });
 }

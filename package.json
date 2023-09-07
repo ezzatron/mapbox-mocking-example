@@ -8,6 +8,7 @@
     "test:ci": "jest --ci"
   },
   "dependencies": {
+    "@turf/circle": "^6.5.0",
     "mapbox-gl": "^2.15.0",
     "next": "latest",
     "react": "^18.2.0",

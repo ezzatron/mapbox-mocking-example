@@ -1,21 +1,31 @@
-import { FeatureCollection, Geometry } from "geojson";
+import { Feature, FeatureCollection, Geometry, Polygon } from "geojson";
 
 export type MapFeaturesResponse = {
   latest: string;
-  features: SessionFeatureCollection;
+  features: TransactionFeatureCollection;
 };
 
 export type LatestTransactionResponse = { latest: string };
 
-export type SessionFeatureCollection = FeatureCollection<
+export type TransactionAccuracyResponse = {
+  transactionId: string;
+  accuracy: Feature<Polygon>;
+};
+
+export type TransactionFeatureCollection = FeatureCollection<
   Geometry,
-  SessionFeatureProperties
+  TransactionFeatureProperties
 >;
 
-export type SessionFeatureProperties = {
+export type TransactionFeature = Feature<
+  Geometry,
+  TransactionFeatureProperties
+>;
+
+export type TransactionFeatureProperties = {
   id: string;
   accuracy: number;
-  lat: number;
   isLatest?: boolean;
   isNew?: boolean;
+  isSelected?: boolean;
 };
